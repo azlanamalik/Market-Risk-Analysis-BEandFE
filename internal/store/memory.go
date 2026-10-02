@@ -109,6 +109,19 @@ func (store *MemoryStore) InsertPriceTick(ctx context.Context, priceTick domain.
 	return nil
 }
 
+func (store *MemoryStore) SaveTick(ctx context.Context, priceTick domain.PriceTick) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if store.latestPrices == nil {
+		store.latestPrices = make(map[string]domain.PriceTick)
+	}
+	store.latestPrices[priceTick.Symbol] = priceTick
+	return nil
+}
+
 func (store *MemoryStore) UpdatePriceTick(ctx context.Context, priceTick domain.PriceTick) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -158,6 +171,22 @@ func (store *MemoryStore) InsertRisk(ctx context.Context, risk domain.PositionRi
 	}
 
 	store.risks[risk.PortfolioID][risk.Symbol] = risk
+	return nil
+}
+
+func (store *MemoryStore) SaveRisk(ctx context.Context, result domain.PositionRisk) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if store.risks == nil {
+		store.risks = make(map[string]map[string]domain.PositionRisk)
+	}
+	if store.risks[result.PortfolioID] == nil {
+		store.risks[result.PortfolioID] = make(map[string]domain.PositionRisk)
+	}
+	store.risks[result.PortfolioID][result.Symbol] = result
 	return nil
 }
 

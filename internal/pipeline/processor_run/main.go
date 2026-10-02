@@ -7,11 +7,13 @@ import (
 
 	"github.com/azlanamalik/Market-Risk-Analysis-backend-and-frontend-API-/internal/domain"
 	"github.com/azlanamalik/Market-Risk-Analysis-backend-and-frontend-API-/internal/pipeline"
+	"github.com/azlanamalik/Market-Risk-Analysis-backend-and-frontend-API-/internal/risk"
 	"github.com/azlanamalik/Market-Risk-Analysis-backend-and-frontend-API-/internal/store"
 )
 
 func main() {
 	memoryStore := store.MemoryStore{}
+	processor := pipeline.NewProcessor(&memoryStore, risk.Engine{})
 	ctx := context.Background()
 
 	memoryStore.InsertPosition(ctx, domain.Position{
@@ -35,7 +37,9 @@ func main() {
 		ObservedAt: time.Now(),
 	}
 
-	pipeline.Processor(ctx, tick, &memoryStore)
+	if err := processor.Process(ctx, tick); err != nil {
+		fmt.Printf("processor failed: %v\n", err)
+	}
 
 	fmt.Println("processor completed")
 

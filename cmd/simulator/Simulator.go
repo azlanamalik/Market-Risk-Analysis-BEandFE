@@ -10,6 +10,7 @@ import (
 	"github.com/azlanamalik/Market-Risk-Analysis-backend-and-frontend-API-/internal/domain"
 	"github.com/azlanamalik/Market-Risk-Analysis-backend-and-frontend-API-/internal/marketdata"
 	"github.com/azlanamalik/Market-Risk-Analysis-backend-and-frontend-API-/internal/pipeline"
+	"github.com/azlanamalik/Market-Risk-Analysis-backend-and-frontend-API-/internal/risk"
 	"github.com/azlanamalik/Market-Risk-Analysis-backend-and-frontend-API-/internal/store"
 )
 
@@ -22,6 +23,7 @@ import (
 func Run(ctx context.Context, symbols []string) {
 	fmt.Println("initialising the simulator")
 	memoryStore := store.MemoryStore{}
+	processor := pipeline.NewProcessor(&memoryStore, risk.Engine{})
 	simulator, errSimCreation := marketdata.NewSimulator(map[string]float64{
 		"AAPL":  336.13,
 		"MSFT":  493.78,
@@ -50,7 +52,9 @@ func Run(ctx context.Context, symbols []string) {
 		go func(tick domain.PriceTick) {
 			defer waitGroup.Done()
 			fmt.Printf("[simulator] processing tick: %s\n", tick.EventID)
-			pipeline.Processor(ctx, tick, &memoryStore)
+			if err := processor.Process(ctx, tick); err != nil {
+				fmt.Printf("[simulator] failed to process tick: %v\n", err)
+			}
 			fmt.Printf("[simulator] finished tick: %s\n", tick.EventID)
 		}(tick)
 	}
