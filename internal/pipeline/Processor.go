@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+
 	"github.com/azlanamalik/Market-Risk-Analysis-backend-and-frontend-API-/internal/domain"
 	"github.com/azlanamalik/Market-Risk-Analysis-backend-and-frontend-API-/internal/risk"
 	"github.com/azlanamalik/Market-Risk-Analysis-backend-and-frontend-API-/internal/store"
@@ -33,19 +34,22 @@ func Processor(ctx context.Context, tick domain.PriceTick, store *store.MemorySt
 		slog.Warn("issue with processor: the tick is not valid")
 	}
 	if err := store.InsertPriceTick(ctx, tick); err != nil {
-		slog.Warn("issue with storing the pricetick")
+		if err := store.UpdatePriceTick(ctx, tick); err != nil {
+			slog.Warn("issue with storing the price tick", "error", err)
+			return
+		}
 	}
 	dataPosBySymb, errGetPosBySymbol := store.GetPositionsBySymbol(ctx, tick.Symbol)
 	if errGetPosBySymbol != nil {
 		slog.Warn("issue with storing the pricetick")
 	}
 	for index, position := range dataPosBySymb {
-		print("here\n")//best debugging tool :)
+		print("here\n") //best debugging tool :)
 		fmt.Println("position", strconv.Itoa(index), ":", position)
-		risk_dat := risk.Risk(tick,position)
-		if err := store.InsertRisk(ctx,risk_dat); err != nil{
+		risk_dat := risk.Risk(tick, position)
+		if err := store.InsertRisk(ctx, risk_dat); err != nil {
 			fmt.Println("issue with storing the risk:", err)
 		}
-	}//so now we have a list of data points that need updating with the new data
-	
+	} //so now we have a list of data points that need updating with the new data
+
 }
