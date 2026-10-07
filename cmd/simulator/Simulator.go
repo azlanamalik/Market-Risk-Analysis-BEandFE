@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"sync"
 	"time"
 
 	"github.com/azlanamalik/Market-Risk-Analysis-backend-and-frontend-API-/internal/domain"
@@ -43,23 +42,32 @@ func Run(ctx context.Context, symbols []string) {
 	}
 
 	fmt.Printf("[simulator] streaming symbols: %v\n", symbols)
-	ticks, _ := simulator.Stream(ctx, symbols)
-	var waitGroup sync.WaitGroup
-
-	for tick := range ticks {
-		fmt.Printf("[simulator] received tick: %s %s bid=%.4f ask=%.4f\n", tick.EventID, tick.Symbol, tick.Bid, tick.Ask)
-		waitGroup.Add(1)
-		go func(tick domain.PriceTick) {
-			defer waitGroup.Done()
-			fmt.Printf("[simulator] processing tick: %s\n", tick.EventID)
-			if err := processor.Process(ctx, tick); err != nil {
-				fmt.Printf("[simulator] failed to process tick: %v\n", err)
-			}
-			fmt.Printf("[simulator] finished tick: %s\n", tick.EventID)
-		}(tick)
+	runContext, cancel := context.WithCancel(ctx)
+	defer cancel()
+	ticks, streamErrors := simulator.Stream(runContext, symbols)
+	processTick := func(ctx context.Context, tick domain.PriceTick) error {
+		fmt.Printf("[simulator] processing tick: %s %s bid=%.4f ask=%.4f\n",
+			tick.EventID, tick.Symbol, tick.Bid, tick.Ask)
+		if err := processor.Process(ctx, tick); err != nil {
+			return fmt.Errorf("process %s: %w", tick.EventID, err)
+		}
+		fmt.Printf("[simulator] processed tick: %s\n", tick.EventID)
+		return nil
+	}
+	pool, errPoolCreation := pipeline.NewWorkerPool(4, processTick)
+	if errPoolCreation != nil {
+		slog.Error("there was an error starting the worker pool", "error", errPoolCreation)
+		return
 	}
 
-	fmt.Println("[simulator] stream stopped; waiting for processors")
-	waitGroup.Wait()
-	fmt.Println("[simulator] all ticks processed")
+	if err := pool.Run(runContext, ticks); err != nil {
+		slog.Error("worker pool stopped", "error", err)
+		return
+	}
+	for streamErr := range streamErrors {
+		if streamErr != nil {
+			slog.Error("market-data stream failed", "error", streamErr)
+		}
+	}
+	fmt.Println("[simulator] stream stopped; all ticks processed")
 }
